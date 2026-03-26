@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GhostGraph — The Pivot Point</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-primary: #0f1117;
+    --bg-secondary: #161b27;
+    --bg-card: #1a2035;
+    --bg-card2: #1e2540;
+    --border: rgba(255,255,255,0.08);
+    --border-accent: rgba(79,195,247,0.3);
+    --border-purple: rgba(168,85,247,0.3);
+    --text-primary: #f0f2f8;
+    --text-secondary: #8892a4;
+    --text-muted: #5a6475;
+    --cyan: #4fc3f7;
+    --cyan2: #00e5ff;
+    --purple: #a855f7;
+    --purple2: #7c3aed;
+    --green: #4caf7d;
+    --red: #e45c5c;
+    --amber: #f59e0b;
+  }
+
+  html, body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Inter', -apple-system, sans-serif;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  /* ── LAYOUT ── */
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 16px 20px 12px;
+  }
+
+  /* ── NAV ── */
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+    flex-shrink: 0;
+  }
+  .nav-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 13px;
+    font-size: 11px;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all .2s;
+    letter-spacing: .02em;
+  }
+  .nav-btn:hover { border-color: var(--border-accent); color: var(--cyan); }
+  .nav-btn.active { background: rgba(79,195,247,0.1); border-color: var(--cyan); color: var(--cyan); }
+  .nav-arrows { margin-left: auto; display: flex; gap: 6px; }
+  .arr-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 30px; height: 30px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .2s;
+  }
+  .arr-btn:hover { border-color: var(--border-accent); color: var(--cyan); }
+
+  /* ── SLIDES ── */
+  .slides-wrap { flex: 1; min-height: 0; position: relative; }
+  .slide {
+    display: none;
+    height: 100%;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+    animation: fadein .3s ease;
+  }
+  .slide.active { display: block; }
+  @keyframes fadein { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+
+  .slide-inner {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 30px 32px 24px;
+    position: relative;
+    overflow: hidden;
+    min-height: calc(100vh - 100px);
+    display: flex;
+    flex-direction: column;
+  }
+  .slide-inner::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 18px 18px 0 0;
+    background: linear-gradient(90deg, var(--cyan), var(--purple));
+  }
+  .slide-inner::after {
+    content: '';
+    position: absolute;
+    top: -80px; right: -80px;
+    width: 240px; height: 240px;
+    background: radial-gradient(circle, rgba(79,195,247,0.04) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  /* ── COMMON COMPONENTS ── */
+  .slide-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 10px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 13px;
+    margin-bottom: 16px;
+    width: fit-content;
+  }
+  .dot-cyan { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); }
+  .dot-purple { width: 6px; height: 6px; border-radius: 50%; background: var(--purple); }
+
+  h1.sh {
+    font-size: clamp(20px, 2.4vw, 30px);
+    font-weight: 500;
+    line-height: 1.25;
+    margin-bottom: 7px;
+    color: var(--text-primary);
+    letter-spacing: -.01em;
+  }
+  .cyan { color: var(--cyan); }
+  .purple { color: var(--purple); }
+  .green { color: var(--green); }
+  .red { color: var(--red); }
+  .muted { color: var(--text-secondary); }
+
+  p.sub {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 22px;
+    line-height: 1.6;
+  }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .three-col { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .card-cyan { border-left: 2px solid var(--cyan); }
+  .card-purple { border-left: 2px solid var(--purple); }
+  .card-red { border-left: 2px solid var(--red); }
+  .card-green { border-left: 2px solid var(--green); }
+  .card-icon { font-size: 18px; margin-bottom: 9px; }
+  .card-title { font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 5px; }
+  .card-sub { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 18px; }
+  .stat {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+  }
+  .stat-num { font-size: 24px; font-weight: 500; color: var(--cyan); }
+  .stat-lbl { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+  .bottom-bar {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 13px 20px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 16px;
+  }
+
+  .vs-bar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 14px;
+    align-items: center;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin: 14px 0;
+  }
+  .vs-item { text-align: center; }
+  .vs-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+  .vs-val { font-size: 13px; font-weight: 500; }
+  .vs-chip {
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(79,195,247,0.1);
+    color: var(--cyan);
+    border: 1px solid var(--border-accent);
+    border-radius: 20px;
+    padding: 4px 12px;
+  }
+
+  .phase-row { display: grid; grid-template-columns: repeat(6,1fr); gap: 8px; }
+  .phase {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 13px 11px;
+  }
+  .phase.hero {
+    border-color: var(--cyan);
+    background: rgba(79,195,247,0.06);
+    position: relative;
+    overflow: hidden;
+  }
+  .phase.hero::after {
+    content: 'PRIMARY';
+    position: absolute;
+    top: 6px; right: 6px;
+    font-size: 8px;
+    letter-spacing: .1em;
+    color: var(--cyan);
+    background: rgba(79,195,247,0.12);
+    border-radius: 4px;
+    padding: 2px 5px;
+  }
+  .phase.sec { border-color: var(--border-purple); }
+  .phase-num { font-size: 10px; color: var(--text-muted); margin-bottom: 7px; }
+  .phase-icon { font-size: 18px; margin-bottom: 7px; }
+  .phase-title { font-size: 12px; font-weight: 500; color: var(--text-primary); margin-bottom: 5px; line-height: 1.35; }
+  .phase-hero-title { font-size: 12px; font-weight: 500; color: var(--cyan); margin-bottom: 5px; line-height: 1.35; }
+  .phase-cap { font-size: 11px; color: var(--text-secondary); line-height: 1.5; }
+  .tag-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+  .tag { font-size: 10px; padding: 2px 7px; border-radius: 20px; border: 1px solid var(--border); color: var(--text-muted); }
+  .tag-c { border-color: rgba(79,195,247,0.4); color: var(--cyan); }
+  .tag-p { border-color: rgba(168,85,247,0.4); color: var(--purple); }
+
+  .mantra {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 20px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 14px;
+    font-family: 'Space Mono', monospace;
+  }
+  .mantra span { color: var(--cyan); font-weight: 700; }
+
+  /* timeline */
+  .tl-row { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 11px; }
+  .tl-period { width: 68px; flex-shrink: 0; text-align: right; font-size: 11px; color: var(--cyan); padding-top: 11px; line-height: 1.4; }
+  .tl-period small { color: var(--text-muted); font-size: 10px; }
+  .tl-dot-col { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; padding-top: 15px; }
+  .tl-dot { width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--cyan); background: rgba(79,195,247,0.15); flex-shrink: 0; }
+  .tl-dot.p { border-color: var(--purple); background: rgba(168,85,247,0.15); }
+  .tl-line { width: 1px; flex: 1; background: var(--border); min-height: 16px; }
+  .tl-card { flex: 1; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 15px; }
+  .tl-title { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+  .tl-sub { font-size: 12px; color: var(--text-secondary); line-height: 1.55; }
+
+  /* revenue */
+  .rev-grid { display: flex; flex-direction: column; gap: 8px; }
+  .rev-row {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 11px 14px;
+  }
+  .rev-icon { font-size: 18px; flex-shrink: 0; width: 26px; text-align: center; }
+  .rev-text { flex: 1; }
+  .rev-title { font-size: 12px; font-weight: 500; color: var(--text-primary); }
+  .rev-sub { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+  .rev-badge { font-size: 10px; padding: 2px 9px; border-radius: 20px; flex-shrink: 0; font-weight: 500; }
+  .rb-c { background: rgba(79,195,247,0.12); color: var(--cyan); border: 1px solid rgba(79,195,247,0.3); }
+  .rb-p { background: var(--bg-card2); color: var(--text-muted); border: 1px solid var(--border); }
+
+  .vision {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 13px 18px;
+    margin-top: 16px; font-size: 13px; color: var(--text-secondary);
+  }
+
+  /* footer */
+  .slide-footer {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 18px; padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .foot-brand { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+  .foot-num { font-size: 11px; color: var(--text-muted); font-family: 'Space Mono', monospace; }
+
+  /* code block */
+  .code-block {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 13px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    margin-top: 10px;
+    line-height: 1.7;
+  }
+
+  /* ── SLIDE 0: INTRO ── */
+  .intro-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 20px 0;
+  }
+  .ghost-logo {
+    width: 80px; height: 80px;
+    border-radius: 22px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 40px;
+    margin-bottom: 22px;
+    box-shadow: 0 0 40px rgba(79,195,247,0.08);
+  }
+  .intro-eyebrow {
+    font-size: 10px;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+  }
+  .intro-title {
+    font-size: clamp(36px, 5vw, 58px);
+    font-weight: 500;
+    letter-spacing: -.02em;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    line-height: 1.1;
+  }
+  .intro-subtitle {
+    font-size: 18px;
+    color: var(--cyan);
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+  .intro-tagline {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 36px;
+    max-width: 380px;
+    line-height: 1.6;
+  }
+  .name-grid {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 28px;
+  }
+  .name-chip {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 22px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    min-width: 130px;
+  }
+  .team-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .team-line { height: 1px; width: 50px; background: var(--border); }
+
+  /* ── SLIDE 5: PROTOTYPE ── */
+  .proto-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    flex: 1;
+    margin-bottom: 14px;
+  }
+  .proto-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 220px;
+  }
+  .proto-header {
+    background: var(--bg-card2);
+    border-bottom: 1px solid var(--border);
+    padding: 9px 14px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .proto-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    text-align: center;
+  }
+  .proto-placeholder { font-size: 11px; color: var(--text-muted); line-height: 1.6; }
+  .proto-placeholder-icon { font-size: 30px; margin-bottom: 10px; opacity: .25; }
+
+  /* ── SLIDE 6: THANK YOU ── */
+  .ty-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 0;
+    padding: 16px 0;
+  }
+  .ty-ghost { font-size: 52px; margin-bottom: 20px; }
+  .ty-eyebrow { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 14px; }
+  .ty-title { font-size: clamp(38px, 5vw, 60px); font-weight: 500; letter-spacing: -.02em; color: var(--text-primary); margin-bottom: 12px; }
+  .ty-tagline { font-size: 15px; color: var(--cyan); font-weight: 500; margin-bottom: 28px; }
+  .ty-divider { height: 1px; width: 100px; background: var(--border); margin: 0 auto 24px; }
+  .ty-q { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; }
+  .ty-names { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .ty-name {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  /* scrollbar */
+  .slide::-webkit-scrollbar { width: 4px; }
+  .slide::-webkit-scrollbar-track { background: transparent; }
+  .slide::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- NAV -->
+  <div class="nav">
+    <button class="nav-btn active" onclick="go(0)">00 — Intro</button>
+    <button class="nav-btn" onclick="go(1)">01 — Market Gap</button>
+    <button class="nav-btn" onclick="go(2)">02 — USP</button>
+    <button class="nav-btn" onclick="go(3)">03 — Go-To-Market</button>
+    <button class="nav-btn" onclick="go(4)">04 — Future Plans</button>
+    <button class="nav-btn" onclick="go(5)">05 — Prototype</button>
+    <button class="nav-btn" onclick="go(6)">06 — Thank You</button>
+    <div class="nav-arrows">
+      <button class="arr-btn" onclick="go(cur-1)" title="Previous (←)">←</button>
+      <button class="arr-btn" onclick="go(cur+1)" title="Next (→)">→</button>
+    </div>
+  </div>
+
+  <div class="slides-wrap">
+
+    <!-- ════════════════════════════ SLIDE 0: INTRO ════════════════════════════ -->
+    <div class="slide active" id="sl0">
+      <div class="slide-inner">
+        <div class="intro-wrap">
+          <div class="ghost-logo">👻</div>
+          <div class="intro-eyebrow">E-Cell Entrepreneurship Competition</div>
+          <div class="intro-title">GhostGraph</div>
+          <div class="intro-subtitle">The Pivot Point</div>
+          <div class="intro-tagline">Your social life is a private key, not a corporate asset.</div>
+
+          <div class="name-grid">
+            <div class="name-chip">Vedant Trivedi</div>
+            <div class="name-chip">Parshwa Nahar</div>
+            <div class="name-chip">Aditya Daga</div>
+            <div class="name-chip">Archit Panda</div>
+          </div>
+
+          <div class="team-label">
+            <div class="team-line"></div>
+            Team: The Pivot Point
+            <div class="team-line"></div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span class="foot-brand">👻 GhostGraph</span>
+          <span class="foot-num">00 / 06</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════ SLIDE 1: MARKET GAP ════════════════════════════ -->
+    <div class="slide" id="sl1">
+      <div class="slide-inner">
+        <div class="slide-tag"><span class="dot-cyan"></span>Market Gap &amp; Solution</div>
+        <h1 class="sh">The internet reads <span class="cyan">every message you send.</span></h1>
+        <p class="sub">4.9B social media users — and not one truly owns their data or conversations.</p>
+
+        <div class="stat-grid">
+          <div class="stat"><div class="stat-num">4.9B</div><div class="stat-lbl">Social media users globally</div></div>
+          <div class="stat"><div class="stat-num">0</div><div class="stat-lbl">Who actually own their data</div></div>
+          <div class="stat"><div class="stat-num">$612B</div><div class="stat-lbl">Surveillance advertising market</div></div>
+        </div>
+
+        <div class="two-col">
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--red);margin-bottom:2px;">❌ The Problem</div>
+            <div class="card card-red">
+              <div class="card-icon">👁</div>
+              <div class="card-title">You are the product</div>
+              <div class="card-sub">Platforms scan DMs, track behavior patterns, and sell your identity profile to advertisers — with no meaningful consent mechanism.</div>
+            </div>
+            <div class="card card-red">
+              <div class="card-icon">🔒</div>
+              <div class="card-title">Platform lock-in</div>
+              <div class="card-sub">Your friends, messages, and history are held hostage. Leave the platform and you lose everything you built there.</div>
+            </div>
+            <div class="card card-red">
+              <div class="card-icon">⚖️</div>
+              <div class="card-title">The false trade-off</div>
+              <div class="card-sub">Privacy apps demand full migration. Nobody moves. The problem persists because the switching cost is simply too high.</div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--green);margin-bottom:2px;">✅ GhostGraph Fixes This</div>
+            <div class="card card-green">
+              <div class="card-icon">🛡</div>
+              <div class="card-title">Zero-switching privacy layer</div>
+              <div class="card-sub">An invisible encryption layer on top of existing platforms. Keep using Instagram — it just can't read your messages anymore.</div>
+              <div class="code-block">
+                To Instagram &nbsp;→ <span style="color:var(--red);">random encrypted bytes</span><br>
+                To your friend → <span style="color:var(--green);">normal message ✓</span>
+              </div>
+            </div>
+            <div class="card card-green">
+              <div class="card-icon">🌐</div>
+              <div class="card-title">Portable social graph</div>
+              <div class="card-sub">Your identity is decoupled from any platform. If a platform blocks GhostGraph, your entire network moves instantly to an alternative.</div>
+            </div>
+            <div class="card card-green">
+              <div class="card-icon">✨</div>
+              <div class="card-title">Privacy + personalization</div>
+              <div class="card-sub">Encrypted preference signals power recommendations — you get relevance without exposing what you say or who you talk to.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bottom-bar">
+          GhostGraph — the protocol layer that gives users back their digital sovereignty
+          <strong style="color:var(--text-primary)"> without asking them to change a single habit.</strong>
+        </div>
+        <div class="slide-footer">
+          <span class="foot-brand">👻 GhostGraph</span>
+          <span class="foot-num">01 / 06</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════ SLIDE 2: USP ════════════════════════════ -->
+    <div class="slide" id="sl2">
+      <div class="slide-inner">
+        <div class="slide-tag"><span class="dot-purple"></span>Unique Selling Proposition</div>
+        <h1 class="sh">Privacy that requires <span class="cyan">zero behavior change.</span></h1>
+        <p class="sub">Users don't need a new app, new friends, or new habits. GhostGraph lives where they already are.</p>
+
+        <div class="three-col" style="margin-bottom:14px;">
+          <div class="card card-cyan">
+            <div class="card-icon">🔐</div>
+            <div class="card-title">On-device encryption</div>
+            <div class="card-sub">Messages encrypted before leaving your device. Zero-knowledge architecture — not even GhostGraph can read them.</div>
+          </div>
+          <div class="card card-cyan">
+            <div class="card-icon">🧩</div>
+            <div class="card-title">Overlay, not replace</div>
+            <div class="card-sub">Works silently on Instagram, WhatsApp, Facebook. No new app. No friends to convince. No switching cost whatsoever.</div>
+          </div>
+          <div class="card card-cyan">
+            <div class="card-icon">🌐</div>
+            <div class="card-title">Decentralized routing</div>
+            <div class="card-sub">Messages route through a decentralized network. No central server means no single point of surveillance or failure.</div>
+          </div>
+        </div>
+
+        <div class="vs-bar">
+          <div class="vs-item">
+            <div class="vs-label">Signal / Telegram</div>
+            <div class="vs-val" style="color:var(--red);">New app → new network</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Nobody migrates. Friends don't follow.</div>
+          </div>
+          <div class="vs-chip">vs</div>
+          <div class="vs-item">
+            <div class="vs-label">GhostGraph</div>
+            <div class="vs-val" style="color:var(--green);">Same app → private layer</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Works where users already are.</div>
+          </div>
+        </div>
+
+        <div class="three-col">
+          <div class="card card-purple">
+            <div class="card-icon">📊</div>
+            <div class="card-title">Privacy + personalization</div>
+            <div class="card-sub">Encrypted preference signals power recommendations — no raw data exposure. Privacy doesn't mean a dumb feed.</div>
+          </div>
+          <div class="card card-purple">
+            <div class="card-icon">🏛</div>
+            <div class="card-title">Patented technology</div>
+            <div class="card-sub">Proprietary encryption protocol creates a defensible moat. Competitors can't replicate — we can license to them.</div>
+          </div>
+          <div class="card card-purple">
+            <div class="card-icon">🏗</div>
+            <div class="card-title">Platform-of-platforms</div>
+            <div class="card-sub">Not a social app — the infrastructure layer. GhostDM → GhostFeed → universal API. Every app can build on GhostGraph.</div>
+          </div>
+        </div>
+
+        <div class="bottom-bar">
+          Your social life is a <strong style="color:var(--cyan);">private key</strong>, not a corporate asset.
+        </div>
+        <div class="slide-footer">
+          <span class="foot-brand">👻 GhostGraph</span>
+          <span class="foot-num">02 / 06</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════ SLIDE 3: GO TO MARKET ════════════════════════════ -->
+    <div class="slide" id="sl3">
+      <div class="slide-inner">
+        <div class="slide-tag"><span class="dot-cyan"></span>Go-To-Market Strategy</div>
+        <h1 class="sh">Start niche → build trust → <span class="cyan">scale through ecosystems</span></h1>
+        <p class="sub">A phased approach where each stage creates the foundation for the next — developer ecosystem at the core.</p>
+
+        <div class="phase-row">
+          <div class="phase">
+            <div class="phase-num">Phase 01</div>
+            <div class="phase-icon">🛡</div>
+            <div class="phase-title">Trust-led entry</div>
+            <div class="phase-cap">Journalists, lawyers, activists. High-stakes early adopters who evangelize to the mainstream.</div>
+            <div class="tag-row"><span class="tag">Trust-first</span><span class="tag">Niche</span></div>
+          </div>
+          <div class="phase">
+            <div class="phase-num">Phase 02</div>
+            <div class="phase-icon">🧩</div>
+            <div class="phase-title">Overlay distribution</div>
+            <div class="phase-cap">Works on existing platforms. No migration needed. Zero friction to adoption for new users.</div>
+            <div class="tag-row"><span class="tag">Zero friction</span></div>
+          </div>
+          <div class="phase hero">
+            <div class="phase-num" style="color:var(--cyan);">Phase 03</div>
+            <div class="phase-icon">⚡</div>
+            <div class="phase-hero-title">Developer ecosystem engine</div>
+            <div class="phase-cap">SDK + Open APIs. Let devs build before mass users arrive. Third-party apps create organic demand pull.</div>
+            <div class="tag-row"><span class="tag tag-c">SDK</span><span class="tag tag-c">Open API</span><span class="tag tag-c">Dev tools</span></div>
+          </div>
+          <div class="phase sec">
+            <div class="phase-num">Phase 04</div>
+            <div class="phase-icon">🤝</div>
+            <div class="phase-title">Strategic partnerships</div>
+            <div class="phase-cap">Leverage existing trust networks as distribution amplifiers for the GhostGraph protocol.</div>
+            <div class="tag-row"><span class="tag tag-p">Proton</span><span class="tag tag-p">Tor</span><span class="tag tag-p">Brave</span></div>
+          </div>
+          <div class="phase">
+            <div class="phase-num">Phase 05</div>
+            <div class="phase-icon">🏅</div>
+            <div class="phase-title">Community + monetization</div>
+            <div class="phase-cap">Founding Members earn digital badges and NFT tokens — early believers become brand evangelists.</div>
+          </div>
+          <div class="phase">
+            <div class="phase-num">Phase 06</div>
+            <div class="phase-icon">📱</div>
+            <div class="phase-title">Multi-channel launch</div>
+            <div class="phase-cap">Browser extension + PWA + SDK. Platform-independent rollout ensures a ubiquitous presence.</div>
+            <div class="tag-row"><span class="tag">PWA</span><span class="tag">SDK</span><span class="tag">Extension</span></div>
+          </div>
+        </div>
+
+        <div class="mantra">
+          <span>Start niche</span> → <span>build trust</span> → <span>empower developers</span> → <span>scale through ecosystems</span>
+        </div>
+        <div class="slide-footer">
+          <span class="foot-brand">👻 GhostGraph</span>
+          <span class="foot-num">03 / 06</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════ SLIDE 4: FUTURE PLANS ════════════════════════════ -->
+    <div class="slide" id="sl4">
+      <div class="slide-inner">
+        <div class="slide-tag"><span class="dot-purple"></span>Future Plans &amp; Revenue Model</div>
+        <h1 class="sh">Building the <span class="cyan">infrastructure for private social.</span></h1>
+        <p class="sub">A staged product roadmap paired with diversified, usage-driven revenue streams.</p>
+
+        <div class="two-col">
+          <!-- Left: Roadmap -->
+          <div>
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--text-muted);margin-bottom:12px;">Product Roadmap</div>
+            <div class="tl-row">
+              <div class="tl-period">Now<br><small>2025</small></div>
+              <div class="tl-dot-col"><div class="tl-dot"></div><div class="tl-line"></div></div>
+              <div class="tl-card card-cyan">
+                <div class="tl-title" style="color:var(--cyan);">GhostDM</div>
+                <div class="tl-sub">Encrypted DM plugin for Instagram. Zero behavior change required. Beta launch with journalists &amp; activists.</div>
+              </div>
+            </div>
+            <div class="tl-row">
+              <div class="tl-period">6 mo<br><small>Q4 '25</small></div>
+              <div class="tl-dot-col"><div class="tl-dot"></div><div class="tl-line"></div></div>
+              <div class="tl-card card-cyan">
+                <div class="tl-title" style="color:var(--cyan);">SDK + Open APIs</div>
+                <div class="tl-sub">Full developer ecosystem launch. Third-party apps build on the protocol. First enterprise pilots begin.</div>
+              </div>
+            </div>
+            <div class="tl-row">
+              <div class="tl-period">Year 1<br><small>2026</small></div>
+              <div class="tl-dot-col"><div class="tl-dot"></div><div class="tl-line"></div></div>
+              <div class="tl-card card-cyan">
+                <div class="tl-title" style="color:var(--cyan);">GhostFeed</div>
+                <div class="tl-sub">Privacy-first personalized feed using encrypted preference signals. Expands to mass market.</div>
+              </div>
+            </div>
+            <div class="tl-row">
+              <div class="tl-period">Year 2+<br><small>2027+</small></div>
+              <div class="tl-dot-col"><div class="tl-dot p"></div></div>
+              <div class="tl-card card-purple">
+                <div class="tl-title" style="color:var(--purple);">Sovereign Network + Licensing</div>
+                <div class="tl-sub">Standalone decentralized social alternative. Government &amp; enterprise contracts. Patent licensing royalties.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Revenue -->
+          <div>
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--text-muted);margin-bottom:12px;">Revenue Streams</div>
+            <div class="rev-grid">
+              <div class="rev-row">
+                <div class="rev-icon">☁️</div>
+                <div class="rev-text">
+                  <div class="rev-title">Premium encrypted storage</div>
+                  <div class="rev-sub">Users pay for large file storage in privacy-first vaults. Scales with data usage.</div>
+                </div>
+                <div class="rev-badge rb-c">Primary</div>
+              </div>
+              <div class="rev-row">
+                <div class="rev-icon">💎</div>
+                <div class="rev-text">
+                  <div class="rev-title">Premium consumer tier</div>
+                  <div class="rev-sub">Advanced privacy tools &amp; encrypted vaults. Freemium → subscription conversion.</div>
+                </div>
+                <div class="rev-badge rb-p">SaaS</div>
+              </div>
+              <div class="rev-row">
+                <div class="rev-icon">🏢</div>
+                <div class="rev-text">
+                  <div class="rev-title">Enterprise &amp; government</div>
+                  <div class="rev-sub">High-value contracts for secure communication infrastructure with compliance audit modes.</div>
+                </div>
+                <div class="rev-badge rb-p">High ACV</div>
+              </div>
+              <div class="rev-row">
+                <div class="rev-icon">💸</div>
+                <div class="rev-text">
+                  <div class="rev-title">Transaction fees</div>
+                  <div class="rev-sub">Percentage fee on in-app private payments. Scales naturally with network volume.</div>
+                </div>
+                <div class="rev-badge rb-p">Usage</div>
+              </div>
+              <div class="rev-row">
+                <div class="rev-icon">⚙️</div>
+                <div class="rev-text">
+                  <div class="rev-title">Patent licensing</div>
+                  <div class="rev-sub">Royalties from entities using our proprietary encryption standard. Fully passive at scale.</div>
+                </div>
+                <div class="rev-badge rb-p">Passive</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="vision">
+          🔮
+          <span>
+            We monetize <strong style="color:var(--cyan);">storage, infrastructure, and network power</strong>
+            — not user data. The shift of power: platforms → people.
+          </span>
+        </div>
+        <div class="slide-footer">
+          <span class="foot-brand">👻 GhostGraph</span>
+          <span class="foot-num">04 / 06</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════ SLIDE 5: PROTOTYPE ════════════════════════════ -->
+    <div class="slide" id="sl5">
+      <div class="slide-inner">
+        <div class="slide-tag"><span class="dot-cyan"></span>Live Prototype</div>
+        <h1 class="sh">GhostDM — <span class="cyan">see it in action.</span></h1>
+        <p class="sub">A working prototype of end-to-end encrypted messaging layered over existing social platforms — built and coded by Team The Pivot Point.</p>
+
+        <div class="proto-grid">
+          <div class="proto-box">
+            <div class="proto-header">
+              <span class="dot-cyan"></span>
+              Screenshot 1
+            </div>
+            <div class="proto-body">
+              <div class="proto-placeholder">
+                <div class="proto-placeholder-icon">📱</div>
+                Add your prototype<br>screenshot here
+              </div>
+            </div>
+          </div>
+          <div class="proto-box">
+            <div class="proto-header">
+              <span class="dot-cyan"></span>
+              Screenshot 2
+            </div>
+            <div class="proto-body">
+              <div class="proto-placeholder">
+                <div class="proto-placeholder-icon">📱</div>
+                Add your prototype<br>screenshot here
+              </div>
+            </div>
+          </div>
+          <div class="proto-box">
+            <div class="proto-header">
+              <span class="dot-cyan"></span>
+              Screenshot 3
+            </div>
+            <div class="proto-body">
+              <div class="proto-placeholder">
+                <div class="proto-placeholder-icon">📱</div>
+                Add your prototype<br>screenshot here
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bottom-bar">
+          Built and coded by Team The Pivot Point —
+          <strong style="color:var(--text-primary);">real encryption, real app, real privacy.</strong>
+        </div>
+        <div class="slide-footer">
+          <span class="foot-brand">👻 GhostGraph</span>
+          <span class="foot-num">05 / 06</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════ SLIDE 6: THANK YOU ════════════════════════════ -->
+    <div class="slide" id="sl6">
+      <div class="slide-inner">
+        <div class="ty-wrap">
+          <div class="ty-ghost">👻</div>
+          <div class="ty-eyebrow">GhostGraph — The Pivot Point</div>
+          <div class="ty-title">Thank You.</div>
+          <div class="ty-tagline">Your social life is a private key, not a corporate asset.</div>
+          <div class="ty-divider"></div>
+          <div class="ty-q">Open for questions</div>
+          <div class="ty-names">
+            <div class="ty-name">Vedant Trivedi</div>
+            <div class="ty-name">Parshwa Nahar</div>
+            <div class="ty-name">Aditya Daga</div>
+            <div class="ty-name">Archit Panda</div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span class="foot-brand">👻 GhostGraph</span>
+          <span class="foot-num">06 / 06</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end slides-wrap -->
+</div><!-- end app -->
+
+<script>
+  let cur = 0;
+  const total = 7;
+  const slides = document.querySelectorAll('.slide');
+  const btns   = document.querySelectorAll('.nav-btn');
+
+  function go(i) {
+    if (i < 0 || i >= total) return;
+    slides[cur].classList.remove('active');
+    btns[cur].classList.remove('active');
+    cur = i;
+    slides[cur].classList.add('active');
+    btns[cur].classList.add('active');
+    slides[cur].scrollTop = 0;
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown')  go(cur + 1);
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')    go(cur - 1);
+  });
+</script>
+
+</body>
+</html>
